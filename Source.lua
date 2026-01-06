@@ -39,6 +39,7 @@ if not esplib then
             outline = Color3.new(0,0,0),
             from = "mouse", -- mouse, head, top, bottom, center
         },
+        maxDistance = 1000, -- Добавляем максимальную дистанцию
     }
     getgenv().esplib = esplib
 end
@@ -52,10 +53,41 @@ local players = game:GetService("Players")
 local user_input_service = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
 
+-- // helper function to calculate distance to instance
+local function calculate_distance(instance)
+    if not instance then return math.huge end
+    
+    local dist
+    if instance:IsA("Model") then
+        if instance.PrimaryPart then
+            dist = (camera.CFrame.Position - instance.PrimaryPart.Position).Magnitude
+        else
+            local part = instance:FindFirstChildWhichIsA("BasePart")
+            if part then
+                dist = (camera.CFrame.Position - part.Position).Magnitude
+            else
+                dist = math.huge
+            end
+        end
+    elseif instance:IsA("BasePart") then
+        dist = (camera.CFrame.Position - instance.Position).Magnitude
+    else
+        dist = math.huge
+    end
+    
+    return dist
+end
+
 -- // functions
 local function get_bounding_box(instance)
     local min, max = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
     local onscreen = false
+
+    -- Проверяем дистанцию перед вычислением bounding box
+    local dist = calculate_distance(instance)
+    if esplib.maxDistance > 0 and dist > esplib.maxDistance then
+        return min, max, false
+    end
 
     if instance:IsA("Model") then
         for _, p in ipairs(instance:GetChildren()) do
@@ -232,12 +264,6 @@ function espfunctions.add_tracer(instance)
     }
 end
 
--- Функция для обновления настроек ESP в реальном времени
-function espfunctions.update_settings()
-    -- Эта функция будет вызываться для обновления настроек
-    -- Она уже реализована в основном цикле RenderStepped
-end
-
 -- // main thread
 run_service.RenderStepped:Connect(function()
     for instance, data in pairs(espinstances) do
@@ -275,6 +301,35 @@ run_service.RenderStepped:Connect(function()
         end
 
         local min, max, onscreen = get_bounding_box(instance)
+
+        -- Если объект вне дистанции, скрываем всё
+        if not onscreen then
+            if data.box then
+                data.box.outline.Visible = false
+                data.box.fill.Visible = false
+                for _, line in ipairs(data.box.corner_fill) do
+                    line.Visible = false
+                end
+                for _, line in ipairs(data.box.corner_outline) do
+                    line.Visible = false
+                end
+            end
+            if data.healthbar then
+                data.healthbar.outline.Visible = false
+                data.healthbar.fill.Visible = false
+            end
+            if data.name then
+                data.name.Visible = false
+            end
+            if data.distance then
+                data.distance.Visible = false
+            end
+            if data.tracer then
+                data.tracer.outline.Visible = false
+                data.tracer.fill.Visible = false
+            end
+            continue
+        end
 
         if data.box then
             local box = data.box
@@ -418,21 +473,7 @@ run_service.RenderStepped:Connect(function()
                 local text = data.distance
                 local center_x = (min.X + max.X) / 2
                 local y = max.Y + 5
-                local dist
-                if instance:IsA("Model") then
-                    if instance.PrimaryPart then
-                        dist = (camera.CFrame.Position - instance.PrimaryPart.Position).Magnitude
-                    else
-                        local part = instance:FindFirstChildWhichIsA("BasePart")
-                        if part then
-                            dist = (camera.CFrame.Position - part.Position).Magnitude
-                        else
-                            dist = 999
-                        end
-                    end
-                else
-                    dist = (camera.CFrame.Position - instance.Position).Magnitude
-                end
+                local dist = calculate_distance(instance)
                 text.Text = tostring(math.floor(dist)) .. "m"
                 text.Size = esplib.distance.size
                 text.Color = esplib.distance.fill
