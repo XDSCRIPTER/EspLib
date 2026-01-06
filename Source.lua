@@ -232,6 +232,12 @@ function espfunctions.add_tracer(instance)
     }
 end
 
+-- Функция для обновления настроек ESP в реальном времени
+function espfunctions.update_settings()
+    -- Эта функция будет вызываться для обновления настроек
+    -- Она уже реализована в основном цикле RenderStepped
+end
+
 -- // main thread
 run_service.RenderStepped:Connect(function()
     for instance, data in pairs(espinstances) do
@@ -489,6 +495,36 @@ end)
 -- // return
 for k, v in pairs(espfunctions) do
     esplib[k] = v
+end
+
+-- Добавляем функцию для обновления настроек извне
+function esplib.update_setting(setting, value)
+    if type(setting) == "string" then
+        local parts = {}
+        for part in setting:gmatch("[^%.]+") do
+            table.insert(parts, part)
+        end
+        
+        local target = esplib
+        for i = 1, #parts - 1 do
+            if target[parts[i]] then
+                target = target[parts[i]]
+            else
+                return false
+            end
+        end
+        
+        if target[parts[#parts]] ~= nil then
+            target[parts[#parts]] = value
+            return true
+        end
+    elseif type(setting) == "table" then
+        for k, v in pairs(setting) do
+            esplib.update_setting(k, v)
+        end
+        return true
+    end
+    return false
 end
 
 return esplib
